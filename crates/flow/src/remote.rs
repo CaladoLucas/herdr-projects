@@ -7,6 +7,8 @@
 //! `id`, a `label`, a `target` (`user@host` or `ssh://user@host:port`), a `session` and `enabled`. The
 //! `board.machines` setting names them by hand instead. The order the board lists them in is herdr's sidebar's
 //! (remote/sidebar.rs).
+pub mod act;
+pub mod add;
 pub mod automations;
 pub mod carry;
 pub mod check;
@@ -90,6 +92,8 @@ pub fn ask(m: &Machine, what: &str, arg: Option<&Value>, ms: u64) -> Result<Valu
 /// addresses of its machines has them looked up here (remote/sidebar.rs).
 pub fn ask_list(m: &Machine, ms: u64) -> Result<Value, Value> {
     let mut answer = ask(m, "list", None, ms);
+    // What a board heard is what the main Coordinator's autopilot sees of that machine (autopilot/heard.rs).
+    if let Ok(j) = &answer { crate::autopilot::heard::heard(&m.label, j); }
     if let Ok(j) = &mut answer {
         if j.at("tasks").is_array() && j.get("sidebar").is_none() { if let Some(l) = sidebar::asked(m) { j["sidebar"] = l; } }
         if let Some(l) = j.get_mut("sidebar") { sidebar::looked_up(l); }
@@ -115,7 +119,8 @@ fn snapshot(t: &Obj) -> Value {
     json!({ "talk": talk, "landsOn": onto, "folder": tilde(&folder.display().to_string()), "tree": tilde(&tree), "branch": branch_of(&at),
         "settings": rows(&Scope::task(t)).iter().map(|r| r.json()).collect::<Vec<_>>(), "problems": problems(Some(t)), "canWorktree": can_worktree(&folder), "repo": in_repo(t) })
 }
-/// `said`, `usage` and `agentVersion` ride along on each task; `coordinator`: this machine's (coordinator/far.rs); `version` is this side's version (a machine on an older
+/// `said`, `usage` and `agentVersion` ride along on each task; `coordinator`: this machine's (coordinator/far.rs);
+/// `autopilot`: what each of its coordinators shows of autopilot (autopilot/far.rs); `version` is this side's version (a machine on an older
 /// one sends none). Pending hook events are this machine's own and are not sent. `automations`: this machine's own.
 /// `sidebar`: this machine's herdr list of machines, in the order its sidebar shows them (remote/sidebar.rs).
 pub fn remote_list() -> Value {
@@ -134,7 +139,7 @@ pub fn remote_list() -> Value {
     let coordinator = crate::coordinator::far::sent(&crate::coordinator::look::look(&socket), ready);
     // Its machine's and its repos' coordinators that were ever talked to, by level ("machine", "project:<repo>").
     let coordinators: Obj = crate::coordinator::state::all(&socket).into_iter().filter(|co| !co.is_top()).map(|co| (co.to(), crate::coordinator::far::sent(&crate::coordinator::look::look(&co), ready))).collect();
-    json!({ "host": check::hostname(), "version": VERSION, "free": crate::leftovers::room::free_here(), "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "sidebar": sidebar::sent(), "tasks": tasks })
+    json!({ "host": check::hostname(), "version": VERSION, "free": crate::leftovers::room::free_here(), "automations": automations::automations_sent(), "coordinator": coordinator, "coordinators": coordinators, "autopilot": crate::autopilot::far::sent(&socket, crate::clock::now()), "sidebar": sidebar::sent(), "tasks": tasks })
 }
 pub fn remote_main(a: &[String]) -> i32 {
     let what = a.first().cloned().unwrap_or_default();
@@ -145,6 +150,8 @@ pub fn remote_main(a: &[String]) -> i32 {
     println!("{}", serde_json::to_string(&answer).unwrap_or_default());
     0
 }
+/// The asking machine's work settings carried with a task it started or added here.
+pub fn carried_with(id: &str, req: &Value) -> Res<()> { carried(id, req) }
 fn carried(id: &str, req: &Value) -> Res<()> {
     if !req.at("settings").is_object() { return Ok(()); }
     let pairs: Vec<(String, Value)> = req.at("settings").as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -162,8 +169,10 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
         "list" => Ok(remote_list()),
         "after" => Ok(crate::after::far_ask::door(req)), // the tasks a task of the asking machine waits for (after/far_ask.rs)
         "keep" => carry::kept(req, bytes), // a file that goes with words from the asking machine (remote/carry.rs)
+        "add" => add::door(req), // a task the asking machine adds here (remote/add.rs)
         "hello" => Ok(json!({ "ok": true, "host": check::hostname(), "version": VERSION })), // the check a machine runs on itself (remote/check.rs)
         "do" if automations::is_automation_action(req.s("action")) => automations::automation_do(req), // an automation of this machine, not a task
+        "do" if req.s("action").starts_with("autopilot-") => crate::autopilot::far::door(req), // a coordinator's autopilot switched from another machine
         "do" => {
             let t = find(req.s("id"))?;
             let id = t.t("id");
@@ -180,15 +189,20 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
                 "restore" => { archive::restore(&id)?; ok(format!("{id}: restored")) }
                 "delegate" => { carried(&id, req)?; let d = start::delegate_with(&id, vec![], crate::after::Wait { now: req.b("now"), ..Default::default() })?; ok(format!("{id}: {}", crate::after::waiting_words(&d).map(|w| format!("it {w}")).unwrap_or_else(|| "an agent is on it".into()))) }
                 "tell" => { if !t.b("startedOnce") { carried(&id, req)?; } ok(talk::reply(&id, &req.t("text"), crate::status_words::who::YOU)?.msg) }
+                // From another machine's autopilot turn: never for a change to the repo's own settings file, never --anyway.
+                "approve" | "pilot-approve" if (req.b("autopilot") || req.s("action") == "pilot-approve") && (crate::autopilot::care::touches_repo_file(&t) || crate::autopilot::care::held_for_you(&t) || req.b("anyway")) => Ok(json!({ "ok": false, "msg": format!("{id}: refused in an autopilot wake: its change touches the repo's .herdr-projects.json (or it was --anyway): only the human says yes to that.") })),
+                "pilot-approve" => ok(finish_line::approve(&id, None, false)?.msg),
                 "approve" => { let seen = if req.at("seen").is_array() { Some((req.at("seen").get(0).cloned().unwrap_or_default(), req.at("seen").get(1).cloned().unwrap_or_default())) } else { None }; ok(finish_line::approve(&id, seen, *req.at("anyway") == json!(true))?.msg) }
                 "pick" => ok(crate::attempts::settle::pick(&id, &req.t("letter"))?.msg),
                 "fix" => ok(finish_line::send_failure(&id)?.msg),
-                "retry" => ok(finish_line::send_error(&id)?.msg),
+                "retry" => ok(finish_line::send_error_noted(&id, req.s("text"))?.msg),
                 "again" => ok(finish_line::retry(&id)?.msg),
                 "review" => ok(finish_line::send_review(&id)?.msg),
                 "finish" => ok(finish_line::finish_anyway(&id)?.msg),
                 "pin" => { let p = filing::pin(&id)?; ok(format!("{id}: {}", if p.b("pinned") { "pinned" } else { "unpinned" })) }
                 "stop" => { talk::stop(&id)?; ok(format!("{id}: stopped.")) }
+                // Where a task stands, whole, with its closing note: for a coordinator elsewhere that looks after it.
+                "details" => { let mut d = tidy(finish_line::details(&id)?); crate::autopilot::history::with_note(&mut d); Ok(json!({ "ok": true, "msg": "", "details": d })) }
                 // Going into a task from another machine: reopen its space and restart its exited agent here first,
                 // with the same function the local board calls, and answer with the pane to attach to. With `focus`
                 // (a board in a herdr window) this machine's herdr puts it in front, as the local board does.

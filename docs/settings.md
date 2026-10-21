@@ -16,9 +16,11 @@ means, is in [the list](#the-list) below.
 ## Two kinds of setting
 
 - **Work settings**: who works, where, how it is checked, how it lands. They can be set for a task, a repo, or you.
-- **Board settings**: the board itself, the Coordinator, the Watcher (everything under `board.`, `coordinator.` and
-  `watcher.`). They are yours only. Setting one on a task or for a repo is refused, and the answer says how to set it for
-  yourself.
+- **Board settings**: the board itself and the Watcher (everything under `board.` and `watcher.`). They are yours
+  only. Setting one on a task or for a repo is refused, and the answer says how to set it for yourself.
+- **A coordinator's settings**: its program, model, effort, access and your words for it (`coordinator.`), and its
+  [autopilot](autopilot.md) (`autopilot.`). They can be set for one coordinator, or for you (every coordinator), and
+  `autopilot.*` also for this time only, while autopilot is on. Setting one on a task or for a repo is refused.
 
 One setting is neither: `repo.key`, a fact about one repo.
 
@@ -29,14 +31,25 @@ One setting is neither: `repo.key`, a fact about one repo.
    One function does this for every setting (`crates/core/src/store/settings/lookup.rs`); no setting has a lookup of its
    own.
 2. **A board setting is yours only** (above).
-3. **A setting is read when its step starts, and a step under way is never changed**: the agent's settings at its next
+3. **A coordinator's setting is looked up as a work setting is, in its own order:**
+   **this time → this coordinator → you → built in.** The same function does it.
+   - **This coordinator** is the `coordinators` part of your `config.json`, keyed as the coordinators are:
+     `{"coordinators": {"main": {…}, "machine": {…}, "projects": {"<repo>": {…}}}}`. `set`, `unset` and `show` take
+     `--main-coordinator`, `--machine-coordinator` or `--project-coordinator <repo>`.
+   - **This time** is the `autopilot.*` values given with `autopilot on`, kept until autopilot goes off. A
+     `coordinator.*` value is never for this time.
+   - `autopilot.goal` is for one coordinator only: never yours, never for this time.
+   - None of them is ever read from a repo's own file, so code written by agents cannot change them.
+   - `coordinator.instructions` add up: yours, then the coordinator's own. A changed `coordinator.*` counts from its next
+     fresh chat.
+4. **A setting is read when its step starts, and a step under way is never changed**: the agent's settings at its next
    start (whether the task is research only among them), the review's at the next review, the merge's right before the
    merge.
-4. **A repo's own fact** (`repo.key`, the short key of its tasks) is set for that repo and nowhere else: **your entry for
+5. **A repo's own fact** (`repo.key`, the short key of its tasks) is set for that repo and nowhere else: **your entry for
    the repo → the repo's own file → built in.** It is refused on a task and for yourself. Every repo and folder has one:
    the board makes it from the repo's name when it first sees the repo, and saves it as your entry for that repo
    (`"repos": { "gtm-skills": { "repo": { "key": "SKL" } } }`). More: [task numbers and repo keys](task-numbers.md).
-5. **A task in no repo** skips the two repo places. `workspace.*`, `check.*` and `merge.*` do not apply to it, and `show`
+6. **A task in no repo** skips the two repo places. `workspace.*`, `check.*` and `merge.*` do not apply to it, and `show`
    says so.
 
 ## The places
@@ -98,7 +111,9 @@ herdr-projects set <name> <value>                you
 herdr-projects set <name> <value> --repo <name>  your entry for that repo
 herdr-projects set <name> <value> --task <id>    one task
 herdr-projects set <name> <value> --automation <name>   the tasks one automation makes (automations.md)
-herdr-projects unset <name>  [--repo … | --task … | --automation …]   back to what it would be
+herdr-projects set <name> <value> --main-coordinator     one coordinator's own (also --machine-coordinator,
+                                                         --project-coordinator <repo>): coordinator.* and autopilot.*
+herdr-projects unset <name>  [--repo … | --task … | --automation … | a coordinator's flag]   back to what it would be
 herdr-projects show                              your settings, the changed ones marked
 herdr-projects show <id>                         every value of one task, and the place it came from
 herdr-projects delegate <id> --reviewer.agent claude --merge.by itself
@@ -138,11 +153,28 @@ are changed on that machine.
 | `reviewer.access` | `full` | task, repo entry, you | what the reviewer may do without asking: `full` (anything), `ask` (nothing: it asks first) or `auto` (its program's own auto mode, which checks each action and does the safe ones without asking, and stops the risky ones). The board turns it into each program's own flags. `ask` is refused for a program that cannot ask (pi); `auto` for one with no auto mode (all but claude, codex, cursor, qodercli, qwen), and for a version older than its first |
 | `reviewer.instructions` | `none` | task, repo entry, you | your own words for the reviewer, added after the board's own fixed rules. They add up across the places, broadest first, and the agent is told that later ones win |
 | `reviewer.fallback` | `none` | task, repo entry, you | who takes over when the reviewer cannot go on: a list of agents tried in order (`codex, claude/claude-opus-5-5`; a model after a slash, as in `reviewer.agent`), or `none`. It reviews in its place when the reviewer's provider is down (after the board's own tries), the reviewer is out of allowance or logged out, or its program is not installed here; it then reviews the later rounds of that task too. With the list used up the review fails as before. Nobody extra runs until then. More: [the fallback agent](fallback.md) |
-| `coordinator.agent` | `claude` | you only | the Coordinator, the agent you talk to in the chat's program: one of `claude`, `codex`, `pi`, `agy`, `copilot`, `cursor`, `devin`, `droid`, `grok`, `hermes`, `kilo`, `kimi`, `letta`, `mastracode`, `omp`, `opencode`, `qodercli`, `qwen`, with an optional model after a slash (`codex/gpt-6.1-sol`, `agy/gemini-3-pro`). The model travels with the program, so one program's model is never handed to another; a name the program does not take is refused with the ones it does (`herdr-projects models` lists them, [models](models.md)). A program that cannot do this role, or take a model or an effort, is refused with the reason ([agents](agents.md)). `none`: no Coordinator |
-| `coordinator.effort` | `default` | you only | the Coordinator, the agent you talk to in the chat's effort level: one its program accepts (checked against `coordinator.agent`), or `default` for the program's own |
-| `coordinator.fast` | `false` | you only | the Coordinator, the agent you talk to in the chat in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so |
-| `coordinator.access` | `full` | you only | what the Coordinator, the agent you talk to in the chat may do without asking: `full` (anything), `ask` (nothing: it asks first) or `auto` (its program's own auto mode, which checks each action and does the safe ones without asking, and stops the risky ones). The board turns it into each program's own flags. `ask` is refused for a program that cannot ask (pi); `auto` for one with no auto mode (all but claude, codex, cursor, qodercli, qwen), and for a version older than its first |
-| `coordinator.instructions` | `none` | you only | your own words for the Coordinator, the agent you talk to in the chat, added after the board's own fixed rules |
+| `coordinator.agent` | `claude` | coordinator, you | the Coordinator, the agent you talk to in the chat's program: one of `claude`, `codex`, `pi`, `agy`, `copilot`, `cursor`, `devin`, `droid`, `grok`, `hermes`, `kilo`, `kimi`, `letta`, `mastracode`, `omp`, `opencode`, `qodercli`, `qwen`, with an optional model after a slash (`codex/gpt-6.1-sol`, `agy/gemini-3-pro`). The model travels with the program, so one program's model is never handed to another; a name the program does not take is refused with the ones it does (`herdr-projects models` lists them, [models](models.md)). A program that cannot do this role, or take a model or an effort, is refused with the reason ([agents](agents.md)). `none`: no Coordinator |
+| `coordinator.effort` | `default` | coordinator, you | the Coordinator, the agent you talk to in the chat's effort level: one its program accepts (checked against `coordinator.agent`), or `default` for the program's own |
+| `coordinator.fast` | `false` | coordinator, you | the Coordinator, the agent you talk to in the chat in its program's fast mode: a faster service tier that uses more of your allowance. Only Codex has one; for another program it does nothing, and `show` says so |
+| `coordinator.access` | `full` | coordinator, you | what the Coordinator, the agent you talk to in the chat may do without asking: `full` (anything), `ask` (nothing: it asks first) or `auto` (its program's own auto mode, which checks each action and does the safe ones without asking, and stops the risky ones). The board turns it into each program's own flags. `ask` is refused for a program that cannot ask (pi); `auto` for one with no auto mode (all but claude, codex, cursor, qodercli, qwen), and for a version older than its first |
+| `coordinator.instructions` | `none` | coordinator, you | your own words for the Coordinator, the agent you talk to in the chat, added after the board's own fixed rules. They add up across the places, broadest first: yours, then this coordinator's own |
+| `autopilot.goal` | `none` | coordinator | what a coordinator on autopilot works toward, in your words. Autopilot cannot be on without one. Said for one coordinator only: never for you, never for this time. More: [autopilot](autopilot.md) |
+| `autopilot.every` | `6h` | this time, coordinator, you | autopilot's timer, or `none`: a timer wake happens only if the board changed in its area since its last wake ended (the free look, which costs nothing), or a new day began with room |
+| `autopilot.gap` | `10m` | this time, coordinator, you | the least time between the end of one wake's turn, or of a turn a message of yours started, and the next wake; reasons that come meanwhile are kept and merged into one wake |
+| `autopilot.wakesPerDay` | `24` | this time, coordinator, you | the most wakes in one day (this machine's time zone), counted when a wake is typed in; reasons after that wait for the next day |
+| `autopilot.when` | `done stuck added` | this time, coordinator, you | the board events that wake it, or `none`: `done` a task in its area was merged or done; `stuck` a task it may look after starts to need looking after (it failed, or its agent asks a question); `added` a task was added in its area by anyone but this coordinator |
+| `autopilot.hours` | `any` | this time, coordinator, you | when it may wake: `any`, or days and hours in this machine's time zone (`mon-fri 09:00-18:00`, `22:00-06:00`, `sat,sun 10:00-16:00`). Outside them its reasons wait |
+| `autopilot.tasksPerDay` | `5` | this time, coordinator, you | the most tasks it adds in one day (this machine's time zone) |
+| `autopilot.tasksAtOnce` | `2` | this time, coordinator, you | the most tasks under way that it added or started: from start (or adding, when chained) until merged, done, stopped or archived; waiting for you counts. Under `autopilot.scope all`, your tasks it started count |
+| `autopilot.mayChange` | `none` | this time, coordinator, you | which task settings it may give the tasks it adds: exact names (`worker.effort`) and areas (`review.*`), or `none`. Never `merge.*`, `limit.*` or `autopilot.*`; a bare `*` is refused. A setting it is not allowed is not applied, and its answer names it |
+| `autopilot.scope` | `own` | this time, coordinator, you | `own`: it looks after only the tasks it added. `all`: it may also start your to-do tasks in its area, on its own machine, and then looks after them. A task of yours it did not start is never its to look after |
+| `autopilot.approve` | `no` | this time, coordinator, you | whether it may say yes (a plan, a merge) for the tasks it may look after. `no`: your `merge.by` alone decides. `yes`: it can merge under `merge.by you`, the one setting that overrides `merge.by`. Never for a task held by `autopilot.repoFileWaits`, never `--anyway` |
+| `autopilot.switchOthers` | `no` | this time, coordinator, you | whether, on its own, it may turn other coordinators' autopilot on (only with that one's saved goal and settings). Turning off is always allowed; its rules use this to judge whether an unasked off of another is fine |
+| `autopilot.releases` | `no` | this time, coordinator, you | whether it may add a release task (a version bump, a tag, a publish). `no`: it says when it thinks one is due. A rule it is told, as a task's purpose cannot be checked by code |
+| `autopilot.retries` | `1` | this time, coordinator, you | how many times it may retry one task before that task is left to you (`0`: at its first failure or question). Answering a question uses none |
+| `autopilot.startAtOnce` | `yes` | this time, coordinator, you | `yes`: every task it adds is started at once, or chained after one of its own. `no`: it may leave tasks to do |
+| `autopilot.needsYouAfter` | `3` | this time, coordinator, you | after this many unanswered wakes in a row (a wake whose turn did not end within 15 minutes), its row says `needs you` and no more wakes are sent until you turn it on again |
+| `autopilot.repoFileWaits` | `yes` | this time, coordinator, you | `yes`: a task it added whose change touches the repo's own `.herdr-projects.json` never merges by itself, whatever `merge.by` or `autopilot.approve` say: it waits for your own yes, its row saying why |
 | `watcher.agent` | `claude/claude-haiku-5-5` | you only | the Watcher: a small model behind the "doing now" line, the progress guess and the minutes left. `none`: none of the three. A program with no headless one-shot is refused ([agents](agents.md)). More: [the Watcher](watcher.md) |
 | `watcher.every` | `60s` | you only | the least time between two looks of the Watcher at one working agent. One hidden model call covers every agent whose look is due, one call runs at a time on the machine, a screen that has not changed costs none, and a busy machine is looked at up to five times less often |
 | `research.only` | `false` | task, repo entry, you, repo file | research only: the task's agent changes nothing in the repo and its result is a report, with a private link. Nothing is committed, pushed, opened as a pull request or merged for it, and its row says `[research]`. Read when the agent starts: a change counts from the task's next start, and turning it on is refused once the agent has changed the repo or a pull request is open. `--research` and `--no-research` on `add` and `delegate` are short for it. More: [reports and research-only tasks](research.md) |
