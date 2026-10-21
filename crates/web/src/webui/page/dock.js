@@ -11,6 +11,7 @@
    setTimeout, clearTimeout, HTMLTextAreaElement, Event */
 import { setHome } from "./dom.js";
 import { sendsOn } from "./compose.js";
+import { keepList, STEPS } from "./keep.js";
 
 // The web UI's places this leans on (herdr-web-ui 0.4.12: App.tsx, PaneTerminal.tsx, Composer.tsx there).
 const COLUMN = ".pane-column", CHAT = ".pane-frame.is-current .terminal-stack.is-chat", COMPOSER = ".pane-frame.is-current .composer";
@@ -54,7 +55,7 @@ const uploading = (box) => !!box.closest(COMPOSER)?.querySelector(".composer-att
 // does (a task's agent). `guest`: the board's button put in the web UI's box, beside its mic, while docked. The Coordinator's go through the board, as its own box sends them: with where you were (the
 // repo, the open task), and waiting while it is busy. It decides itself what to start, so there is no second way to send.
 export function dockFor({ boardOf, onChange, onTyping, route, guest = null }) {
-  let want = null, on = false, home = null, homeSearch = "", shown = "", wait = 0, typing = false, queued = false, boxH = -1;
+  let want = null, on = false, home = null, homeSearch = "", shown = "", wait = 0, typing = false, queued = false, boxH = -1, appH = "";
   const mine = () => !!want && here(want) && !!document.querySelector(CHAT) && !!document.querySelector(COLUMN);
   // What the board covers, given to the web UI's pane column as room to leave: down to the foot of the board's bar, or
   // on a wide screen the width of the board's column under the bar.
@@ -70,9 +71,27 @@ export function dockFor({ boardOf, onChange, onTyping, route, guest = null }) {
     html.style.setProperty("--sw-dock-left", side ? `${Math.max(0, Math.round(b.right - c.left))}px` : "0px");
     const composer = document.querySelector(COMPOSER), ch = Math.round(composer?.getBoundingClientRect().height || 0);
     if (composer && !composer.dataset.swSized) { composer.dataset.swSized = "1"; sizes?.observe(composer); }
-    if (ch !== boxH) { boxH = ch; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
+    // (And the height the web UI's shell leaves, which a phone's keyboard going down changes after the box let go.)
+    const app = html.style.getPropertyValue("--app-height");
+    if (ch !== boxH || app !== appH) { boxH = ch; appH = app; html.style.setProperty("--sw-composer-h", `${ch}px`); onChange(); }
     seat(composer);
     keys();
+    // With the chat hidden the list stays in view, also while you type in the web UI's box: it gives way (keep.js).
+    const box = theBox();
+    if (box && board.classList.contains("sw-chat-hidden")) keepList(board, box, (n) => room(box, n), () => Math.max(0, board.scrollHeight - board.clientHeight), typing); else unkeep();
+    marks.takeRecords(); // (what this measure changed on the page is its own: nothing to measure again for)
+  };
+  // (Made shorter with the caret at the end of the words, it scrolls to keep that line in view, as typing does.)
+  const room = (box, n) => {
+    if (!html.classList.contains("sw-web-room")) html.classList.add("sw-web-room");
+    if (html.style.getPropertyValue("--sw-web-room") === `${n}px`) return;
+    html.style.setProperty("--sw-web-room", `${n}px`);
+    if (document.activeElement === box && box.selectionEnd >= box.value.length) box.scrollTop = box.scrollHeight;
+  };
+  const unkeep = () => {
+    const board = boardOf();
+    if (board && STEPS.some((c) => board.classList.contains(c))) board.classList.remove(...STEPS);
+    if (html.classList.contains("sw-web-room")) { html.classList.remove("sw-web-room"); html.style.removeProperty("--sw-web-room"); }
   };
   // The guest right after the mic (after the add button where there is no mic); moved only when it is not there, so the
   // move it makes is seen once and changes nothing more. The web UI's own buttons are never moved.
@@ -91,9 +110,9 @@ export function dockFor({ boardOf, onChange, onTyping, route, guest = null }) {
   };
   const set = (now) => {
     if (now === on) return;
-    on = now; boxH = -1;
+    on = now; boxH = -1; appH = "";
     html.classList.toggle("sw-dock", on);
-    if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); if (typing) { typing = false; onTyping(false); } }
+    if (!on) { for (const v of ["--sw-dock-top", "--sw-dock-left", "--sw-composer-h"]) html.style.removeProperty(v); unkeep(); if (typing) { typing = false; onTyping(false); } }
     onChange();
     soon();
   };
