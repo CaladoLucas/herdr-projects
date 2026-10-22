@@ -115,6 +115,8 @@ fn picking_an_entry_shows_that_machines_board_as_other_machines_does_and_the_two
     assert_eq!(boards(None).s("scope"), "vm-a", "the section highlights what the board shows");
     // the other way round: the board's own Other machines moves the section's highlight with it
     call("press", json!({ "id": "scope" }), None).unwrap();
+    assert_eq!(boards(None).s("scope"), "*", "after the last machine the round is back at every machine");
+    call("scope", json!({ "to": "" }), None).unwrap();
     assert_eq!(boards(None).s("scope"), "");
     call("scope", json!({ "to": "*" }), None).unwrap();
     assert_eq!(boards(None).s("scope"), "*");
@@ -174,6 +176,7 @@ fn only_a_board_picked_on_the_web_is_kept_another_change_leaves_the_web_followin
     assert_eq!(s.at("flags").s("scope"), "*");
     assert!(s.at("list").arr("groups").iter().any(|g| g.arr("rows").iter().any(|r| r.s("title") == "Theirs 1")), "{}", s.at("list"));
     // the scope key pressed on the web is a pick, as the sidebar's entry is
-    call("press", json!({ "id": "scope" }), None).unwrap();
-    assert_eq!(kept().at("ownScope"), &json!("vm-a"));
+    let s = call("press", json!({ "id": "scope" }), None).unwrap();
+    assert_ne!(s.at("flags").s("scope"), "*");
+    assert_eq!(kept().at("ownScope"), s.at("flags").at("scope"));
 }

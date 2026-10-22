@@ -1,7 +1,7 @@
 //! Requests to the Coordinator: written down here (send, restart, new, stop, open), carried out by the pump. What the
 //! human types goes in word for word. Where they were (the repo, the task they had open) is kept beside it, and the
 //! Coordinator asks for it with `coordinator where`, so one conversation serves every repo the board is opened in. A
-//! message sent with tab carries a line under the words saying so; the chat shows the words alone.
+//! message sent with the start key (ctrl+s) carries a line under the words saying so; the chat shows the words alone.
 use super::co::Co;
 use super::state::{change, get, home};
 use super::who::{choice, OFF_WORDS};
@@ -34,9 +34,9 @@ pub fn where_text(co: impl Into<Co>) -> String {
     let head = format!("The human's last {} from the board{}:", if list.len() > 1 { format!("{} messages", list.len()) } else { "message".into() }, if list.len() > 1 { ", the newest last. Each has its own repo, open task and delegate choice: use the ones of the message you are acting on" } else { "" });
     std::iter::once(head).chain(list.iter().map(|w| format!("- {}", one(w)))).collect::<Vec<_>>().join("\n")
 }
-/// The board's own half of "sent with tab": a task added from the Coordinator's pane is delegated by `add` itself when
+/// The board's own half of "sent with the start key": a task added from the Coordinator's pane is delegated by `add` itself when
 /// it can only come from a tab message (the last message went in while it was at rest, it is still in that turn, and
-/// every message it may still have ahead of it was sent with tab).
+/// every message it may still have ahead of it was sent with the start key).
 pub fn tab_turn(pane: &str, socket: &str) -> bool { super::state::all(socket).iter().any(|co| tab_turn_of(pane, co)) }
 fn tab_turn_of(pane: &str, co: &Co) -> bool {
     let socket = co.socket.as_str();

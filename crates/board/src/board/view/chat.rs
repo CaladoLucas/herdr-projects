@@ -67,6 +67,8 @@ fn who_of(s: &mut State, t: &Theme, r: Option<&Obj>) -> Option<Who> {
     let v = s.data.coord.clone();
     let screen = s.data.coord_screen.clone();
     let mut c = coord_who(t, &v, &screen, !v.unseen.is_empty() && !s.chat_open);
+    let main = crate::board::update::coords::Target { name: crate::status_words::COORDINATOR.into(), ..Default::default() };
+    c.mark = super::pilot::in_chat(s, &main, &v, c.mark);
     c.always = !v.error.is_empty() && s.err_hid != v.error;
     Some(c)
 }
@@ -87,7 +89,9 @@ fn far_who(s: &mut State, t: &Theme, far: &str) -> Who {
     if let Some(v) = crate::coordinator::far::read(&s.remotes[far].coord) {
         let turn = v.talk.last().map(|x| x.text.clone()).unwrap_or_default();
         let target = crate::board::update::coords::Target { host: far.into(), to: String::new(), name: name.clone() };
-        return super::coords::with_sent(s, &target, &v, Who { name, turn, ..coord_who(t, &v, "", false) });
+        let w = Who { name, turn, ..coord_who(t, &v, "", false) };
+        let w = Who { mark: super::pilot::in_chat(s, &target, &v, w.mark.clone()), ..w };
+        return super::coords::with_sent(s, &target, &v, w);
     }
     let m = &s.remotes[far];
     // An older version there sends nothing of it; a machine with none adds what you type as a task.
@@ -99,7 +103,7 @@ fn far_who(s: &mut State, t: &Theme, far: &str) -> Who {
 /// What the Coordinator is called where you would talk to it now: this machine's, the one of the machine whose board
 /// shows, or no Coordinator at all (the box then adds tasks).
 pub fn coord_name(s: &State) -> String {
-    if !s.scope.is_empty() && s.scope != "*" && s.remotes.contains_key(&s.scope) { format!("Coordinator on {}", s.scope) } else if s.data.can_dispatch { "Coordinator".into() } else { "New task".into() }
+    crate::board::update::top::top(s).map(|t| t.name).unwrap_or_else(|| "New task".into())
 }
 /// The line that says who you talk to: the mark, the name in bold, and what it is doing now, greyed. The name is never
 /// cut to make room: the status takes what is left.
@@ -130,8 +134,8 @@ pub fn chat_head(c: &Who, width: usize, tight: bool) -> Vec<Inked> {
 /// Above the text box: an empty line (a short window has none to spare), then who you talk to.
 pub fn chat_lines(c: Option<&Who>, width: usize, tight: bool) -> Vec<Inked> {
     let Some(c) = c else { return vec![] };
+    // Who it is is the box's own title now (chat_title.rs): above it only what goes with it.
     let mut out = if tight { vec![] } else { vec![Inked::new()] };
-    out.extend(chat_head(c, width, tight));
     if !c.note.is_empty() && !tight { out.push(Inked::plain("   ").add(Inked::of(crate::text::cut(&c.note, width.saturating_sub(3).max(1)), Ink::Muted))); }
     out.extend(c.call.iter().take(if tight { 1 } else { 3 }).map(|l| l.cut(width.max(1))));
     out
@@ -142,8 +146,9 @@ pub fn chat_up(s: &State, c: Option<&Who>) -> bool { c.map(|c| s.chat_open || c.
 pub fn chat_message(s: &mut State, c: Option<&Who>, width: usize, max: usize) -> Vec<Inked> {
     let Some(c) = c.filter(|c| !c.text.is_empty()) else { return vec![] };
     if max < 1 { return vec![]; }
-    // Inside the box all looks as with the Coordinator, whoever it talks to: only its frame takes their colour.
-    let paint = |by: bool, l: Inked, p: &Part| if by && p.tone == "pilot" { l.recolor(Ink::Pilot) } else if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine { l } else { l.recolor(Ink::Soft) };
+    // Inside the box all looks the same whoever it talks to: your words in the colour you type them in, theirs grey; only
+    // its frame takes their colour.
+    let paint = |by: bool, l: Inked, p: &Part| if by && p.tone == "pilot" { l.recolor(Ink::Pilot) } else if by { l.recolor(Ink::Muted) } else if !p.tone.is_empty() { l.recolor(crate::board::update::beat::ink_of(&p.tone)) } else if p.mine || p.by == "You" { l.recolor(Ink::Plain) } else { l.recolor(Ink::Soft) };
     let (lines, starts) = super::chat_text::part_lines(&c.parts, width.max(1), &paint);
     // The newest thing said alone, whoever said it: the rest of the conversation is above it.
     let latest = starts.get(opens_at(&c.parts)).copied().unwrap_or(0);

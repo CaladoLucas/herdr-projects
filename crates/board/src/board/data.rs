@@ -31,6 +31,11 @@ pub struct Data {
     /// The machine's or a repo's coordinator of this machine the chat talks to: its level ("machine",
     /// "project:<repo>"), how it stands, and its screen (update/coords.rs).
     pub sub: Option<(String, Look, String)>,
+    /// How this machine's other coordinators stand, by level, as far as the board wants them (update/coords.rs:
+    /// looks_wanted): the marks on machines' and projects' rows, the selected one's panel.
+    pub looks: BTreeMap<String, Look>,
+    /// This machine's coordinators that were ever talked to, by level ("machine", "project:<repo>"): one folder read.
+    pub coords: Vec<String>,
     /// This machine's coordinators' autopilot as each shows it, by level ("" the main one, "machine", "project:<repo>").
     pub pilots: Value,
     pub keys: Keys, pub repos: Vec<String>, pub roots: BTreeMap<String, String>, pub session: String, pub notify: String,
@@ -55,7 +60,7 @@ pub struct Data {
 /// What the board wants a closer look at. `mine`: your settings (`Some("")`) or your entry for a repo, for the
 /// settings page. `skills`: whose skills the text box offers ("" none: update/skills.rs).
 #[derive(Clone, Debug, Default)]
-pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String, pub mine: Option<String>, pub skills: String }
+pub struct Wants { pub ids: Vec<String>, pub cwd: String, pub own_pane: String, pub web: bool, pub coord: String, pub mine: Option<String>, pub looks: Vec<String>, pub skills: String }
 
 /// The repo the board is in, worked out once for each folder: a busy lock keeps what was known.
 pub fn repo_here(cwd: &str) -> (String, String) {
@@ -89,15 +94,25 @@ pub fn load(wants: &Wants) -> Data {
     let coord_screen = if !coord.readable && coord.status.is_some() { screen_text(&screen(&coord, &socket)) } else { String::new() };
     let sub = (!wants.coord.is_empty()).then(|| { let co = crate::coordinator::co::Co::of(&socket, &wants.coord); let v = look(&co); let sc = if !v.readable && v.status.is_some() { screen_text(&screen(&v, &co)) } else { String::new() }; (wants.coord.clone(), v, sc) });
     let here = repo_here(&wants.cwd);
+    let looks = looks(&socket, &wants.looks);
+    // A project's whose repo folder is gone has no row: as a repo's heading, it would lead nowhere.
+    let coords = crate::coordinator::state::all(&socket).into_iter().filter(|c| !c.is_top() && c.repo().is_none_or(|r| roots.get(r).is_some_and(|f| std::path::Path::new(f).is_dir()))).map(|c| c.to()).collect();
     let skills = crate::board::skills::read(&wants.skills, &socket, &coord, sub.as_ref());
     Data {
-        items, autos, jobs, coord, coord_screen, sub, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately,
+        items, autos, jobs, coord, coord_screen, sub, looks, coords, can_dispatch: crate::coordinator::who::ready(&socket), keys: repo_keys(), repos: roots.keys().cloned().collect(), roots, lately,
         session: session_name(&socket), notify: setting("board.notify", None).as_str().unwrap_or("").to_string(),
         repo: here.0, repo_root: here.1, host: crate::remote::check::hostname(),
         // herdr's approve action and a line left by the board key are for a board in a terminal, never the web board.
         approve: if wants.web { String::new() } else { crate::actions::finish_line::take_approve(&socket, &wants.own_pane) }, heard: if wants.web { None } else { crate::board::run::say::heard(&wants.own_pane, &socket) }, call: crate::voice::call::get(), call_ended: crate::voice::call::last().filter(|c| c.s("state") == "ended").map(|c| (c.t("id"), c.t("why"))),
         mine: wants.mine.as_ref().map(|r| (r.clone(), mine(r))), skills, pilots: crate::autopilot::far::sent(&socket, now), loaded: true, seq,
     }
+}
+/// How this machine's coordinators of these levels stand ("*": every one that was ever talked to, and the machine's).
+fn looks(socket: &str, wanted: &[String]) -> BTreeMap<String, Look> {
+    let mut levels: Vec<String> = wanted.iter().filter(|w| *w != "*").cloned().collect();
+    if wanted.iter().any(|w| w == "*") { levels.push("machine".into()); levels.extend(crate::coordinator::state::all(socket).into_iter().filter(|c| !c.is_top()).map(|c| c.to())); }
+    levels.sort(); levels.dedup();
+    levels.into_iter().filter(|l| !l.is_empty()).map(|l| { let v = look(crate::coordinator::co::Co::of(socket, &l)); (l, v) }).collect()
 }
 /// How long a repo with no task in view keeps its heading by repo after its last use.
 pub const LATELY_DAYS: i64 = 14;

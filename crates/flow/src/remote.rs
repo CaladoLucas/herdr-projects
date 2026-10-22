@@ -172,7 +172,7 @@ pub fn door_with(what: &str, req: &Value, bytes: &[u8]) -> Res<Value> {
         "add" => add::door(req), // a task the asking machine adds here (remote/add.rs)
         "hello" => Ok(json!({ "ok": true, "host": check::hostname(), "version": VERSION })), // the check a machine runs on itself (remote/check.rs)
         "do" if automations::is_automation_action(req.s("action")) => automations::automation_do(req), // an automation of this machine, not a task
-        "do" if req.s("action").starts_with("autopilot-") => crate::autopilot::far::door(req), // a coordinator's autopilot switched from another machine
+        "do" if req.s("action").starts_with("autopilot-") || req.s("action").starts_with("coordinator-") => crate::autopilot::far::door(req), // a coordinator's autopilot switched, or it started or stopped, from another machine
         "do" => {
             let t = find(req.s("id"))?;
             let id = t.t("id");

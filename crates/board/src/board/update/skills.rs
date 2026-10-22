@@ -36,7 +36,7 @@ pub fn key(s: &mut State, p: &Press) -> bool {
     let (n, at, word) = (list.len(), picked(s, list.len()), s.value());
     if is(p, K::Up) || is(p, K::Down) { s.skill_at = (word, if is(p, K::Up) { (at + n - 1) % n } else { (at + 1) % n }); return true; }
     if is(p, K::Back) { s.skill_closed = word; return true; }
-    if is(p, K::Delegate) || (is(p, K::Enter) && list[at].typed != word) { s.input.set_text(&format!("{} ", list[at].typed)); return true; }
+    if is(p, K::Filter) || is(p, K::Delegate) || (is(p, K::Enter) && list[at].typed != word) { s.input.set_text(&format!("{} ", list[at].typed)); return true; }
     false
 }
 /// After a key: a draft that now wants a list the loader has not read yet is read at once.

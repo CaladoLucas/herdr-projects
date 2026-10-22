@@ -66,7 +66,7 @@ pub fn activity(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
 }
 /// Today's adds against their limit, for its row's column: `2 of 5 added`.
 pub fn added_words(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String { let t = today(co, ap, board, now); format!("{} of {} added", t.added, t.per_day) }
-/// Its line, all of it in one: `autopilot on · every 1h + events · last HSW-92 · next in 40m` (the command line, and what `Tab` says while it is on).
+/// Its line, all of it in one: `autopilot on · every 1h + events · last HSW-92 · next in 40m` (the command line, and what the start key says while it is on).
 pub fn line_of(co: &Co, ap: &Obj, board: &[Obj], now: i64) -> String {
     let st = state_word(co, ap, board, now);
     if st.is_empty() { return String::new(); }
@@ -103,13 +103,4 @@ pub fn view(co: &Co, now: i64) -> Value {
         "today": today(co, &ap, &board, now).say(), "couldNot": ap.at("couldNot"), "next": next_words(co, &ap, now), "last": last_added(&ap),
         "lastId": last_id(&ap), "activity": activity(co, &ap, &board, now), "added": added_words(co, &ap, &board, now),
         "settings": settings_of(co).into_iter().map(|(l, v, o)| json!({ "label": l, "value": v, "once": o })).collect::<Vec<_>>(), "wakes": wakes })
-}
-/// What the main Coordinator's row sums up of the others: "2 others on", "1 needs you" ("" none on).
-pub fn others_words(views: &[Value]) -> String {
-    let on = views.iter().filter(|v| v.b("on")).count();
-    if on == 0 { return String::new(); }
-    let need = views.iter().filter(|v| v.b("on") && ["needs you", "could not start"].contains(&v.s("state"))).count();
-    let mut out = vec![format!("{on} {} on", if on == 1 { "other" } else { "others" })];
-    if need > 0 { out.push(format!("{need} {} you", if need == 1 { "needs" } else { "need" })); }
-    out.join(" · ")
 }

@@ -33,6 +33,10 @@ pub enum Job {
     AutoTurn { id: String, on: bool }, AutoFire { id: String }, AutoRemove { id: String, name: String },
     /// A coordinator of this machine (`to`, as the coordinator code names its level) on autopilot, or off (autopilot/).
     Pilot { to: String, on: bool },
+    /// A coordinator of this machine started (in its own conversation) or stopped, as an agent on a task is.
+    CoordRun { to: String, name: String, on: bool },
+    /// Going into a coordinator of this machine (enter on its row): started first when it is not running.
+    CoordOpen { to: String, name: String, popup: bool },
     /// A setting of a task, an automation, yours or your entry for a repo (`whose`): a value, or none to put it back.
     Set { id: String, name: String, value: Option<String>, whose: super::state::Whose },
     CoordSeen { unseen: String, to: String },
@@ -61,6 +65,9 @@ impl Job {
             | Job::Restore { id, .. } | Job::Clear { id, .. } | Job::Pick { id, .. } | Job::Describe { id, .. } | Job::OpenAgent { id, .. } => id.clone(),
             Job::AutoTurn { id, .. } | Job::AutoFire { id } | Job::AutoRemove { id, .. } => format!("auto:{id}"),
             Job::Far { host, action, req, .. } if action.starts_with("auto-") => format!("{host}:auto:{}", req.s("id")),
+            // A coordinator's row, by its coordinator (coords.rs: Target::key): started, stopped, autopilot, gone into.
+            Job::CoordRun { to, .. } | Job::Pilot { to, .. } | Job::CoordOpen { to, .. } => format!("co:\t{to}"),
+            Job::Far { host, action, req, .. } if action.starts_with("coordinator-") || action.starts_with("autopilot-") => format!("co:{host}\t{}", req.s("to")),
             Job::Far { host, req, .. } => format!("{host}:{}", req.s("id")),
             _ => String::new(),
         }
@@ -188,6 +195,11 @@ fn run_one(job: Job) -> Done {
                 // On says nothing: its heading shows it (view/pilot.rs).
                 if on { crate::autopilot::switch::on(&co, None, &[])?; Done::default() } else { Done::say(crate::autopilot::switch::off(&co)?, Ink::Yellow) }
             }
+            Job::CoordRun { to, name, on } => {
+                let co = crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to);
+                if on { crate::coordinator::requests::restart(&co)?; Done::say(format!("Starting {name}, in its own conversation."), Ink::Muted) } else { crate::coordinator::requests::stop(&co)?; Done::say(format!("Stopped {name}. Your next message starts it again."), Ink::Muted) }
+            }
+            Job::CoordOpen { to, name, popup } => super::job_far::coord_open(&to, &name, popup),
             Job::AutoRemove { id, name } => { crate::automations::list::remove(&id)?; Done::say(format!("Removed the automation \"{name}\"."), Ink::Muted).and(Then::AutoGone) }
             Job::Set { id, name, value, whose } => super::job_far::set(&id, &name, value, &whose)?,
             Job::CoordSeen { unseen, to } => { crate::coordinator::requests::seen(&unseen, crate::coordinator::co::Co::of(&crate::herdr::cli::current_socket(), &to)); Done::default() }

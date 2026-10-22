@@ -23,10 +23,10 @@ On the board, on a coordinator's row (below), with nothing typed:
 
 | Key | Does |
 |---|---|
-| `Tab` | autopilot on, with its saved goal and settings. On one that says `needs you` or `could not start`, it starts again |
-| `Ctrl+X` | autopilot off |
+| `Ctrl+O` | autopilot on, with its saved goal and settings; and off again. On one that says `needs you` or `could not start`, it starts again |
 
-These are the keys that put an agent on a task and stop it. `Tab` with words typed sends them, as always.
+`Ctrl+S` and `Ctrl+X` there start and stop the coordinator itself, as they put an agent on a task and stop it; autopilot
+has its own key.
 
 From a shell:
 
@@ -50,49 +50,29 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
 - **Off** drops this time's values and every reason it had to wake. A turn under way is not cut off (its chat is yours
   too), but from then on every write of that turn is refused: `autopilot was turned off`.
 - **`off --all` is this machine only.** Another machine's coordinators are turned off there, or one by one with
-  `Ctrl+X` on their rows.
+  `Ctrl+O` on their rows.
 - `herdr-projects autopilot` lists this machine's coordinators. Another machine's are on its own board.
 - **`coordinator new`, `restart` and `stop` leave autopilot as it is.** Its next wake goes to the new chat.
-  `coordinator stop` on one on autopilot says so: its next wake starts it again, and `Ctrl+X` turns autopilot off.
+  `coordinator stop` on one on autopilot says so: its next wake starts it again, and `Ctrl+O` turns autopilot off.
 
 ## Where it shows
 
-- **The main Coordinator has a row of its own, on top of the list**, wherever a Coordinator can run (not under
-  `coordinator.agent none`), and on another machine's board shown by itself. The list still opens on its first task:
-  `↑` reaches the top row.
-- **A heading stands for its coordinator**: a machine's heading with every machine shown (`Alt+M`), a repo's heading
-  when grouped by repo (`Alt+S`). Grouped by status, or on one machine, those coordinators have no row: change the
-  grouping to reach them, as to talk to them.
-- **While it is on, its row reads as a task's row**: autopilot's mark `◎` all the way left, in the column where a task
-  has its mark and an automation its arrow, with the fold caret one step in, where a task's tag starts; the timing in
-  the columns on the right, where a task keeps its progress and its time; and what it does now on the line under its
-  name, as a live task's second line.
+- **A machine's row and a project's row stand for their coordinator**, and the top row (`All machines`, or the only
+  machine) for the top-level one; the filter Coordinators (`Tab`) leaves only those
+  ([machine and project coordinators](machine-and-project-coordinators.md)).
+- **While it is on, its row's mark is `∞`**, in the marks' column where a task has its mark, left of the caret, with
+  its time on the right and what it does under it while it works, as any coordinator's row.
 
   ```
-   ◎   Coordinator · 2 others on · 1 needs you                    0 of 5 added  next in 1h
-       On · woke 12m ago: HSW-92 merged
-
-   ◎ ▾ herdr-projects · HSW                               2 of 5 added  ✓ HSW-92  next in 40m
-       Working · woke for HSW-92 merged
-   ✓ HSW-92  Sync never loses data
+   ∞ ▾ herdr-projects · HSW
+     ✓ HSW-92  Sync never loses data
   ```
 
   - **The mark** is one column wide, of the family of a task's marks (`◐ ◇ ○ ✓`), never an emoji. It takes the colour
-    of its state, as a task's does: red at `needs you` and `could not start` (bold, as a task that waits for you),
-    yellow while `working`, quiet while `asleep`, plain text else. No colour of its own.
-  - **The columns**: today's adds against `autopilot.tasksPerDay` (`2 of 5 added`), the last task it added with that
-    task's mark and tag (as an automation shows the task it made), and when it next wakes (`next in 40m`, `waits for its
-    hours`). They end at the list's right edge, where a task's time does. Where the list is narrow they give way, the
-    adds first, then the last task; when it next wakes then goes to the end of the line under the name.
-  - **The line under the name** starts with its state word, then what goes with it: `On · woke 12m ago: …` (or
-    `On · wakes every 1h + events` before its first wake), `Working · woke for …`, `At its limit · 2 of 2 under way:
-    waits for one to finish` (or `no adds left today`), `Asleep · its hours are 09:00-17:00`, `Needs you · its last
-    wakes went unanswered`, `Could not start · …`. In the brighter grey a task's line has; `Needs you` and
-    `Could not start` in red.
-  - **A machine's heading** keeps its rule: it runs from the name to the columns.
-
-  Off, nothing of autopilot shows, as a task shows nothing of an agent before one is on it. A machine on an older
-  version sends only its old line: that goes under the name.
+    of its state, as a task's does: red at `needs you` (bold, as a task that waits for you), yellow while `working`,
+    quiet while `asleep`, plain text else. No colour of its own. A coordinator that needs you itself (`!`) or could not
+    start (`✗`) shows that mark instead.
+  - Off, nothing of autopilot shows: its row has its coordinator's own mark (`○` idle).
 - **The state word**, the first that holds:
 
   | Word | Means |
@@ -104,14 +84,12 @@ herdr-projects autopilot off [--machine | --project <repo> | --all]
   | `at its limit` | no room for more tasks, and none of its tasks needs looking after |
   | `on` | waiting for its next reason to wake |
 
-- **The main Coordinator's row sums up the others**, so autopilot is seen in every grouping: `2 others on`, and
-  `1 needs you` when any other shows `needs you` or `could not start`. Nothing when none is on.
 - **Its panel.** `Alt+P` shows the coordinator beside the list in the [task panel](task-panel.md)'s form, `Alt+T` the
   same whole, with its last 20 wakes (when, why, answered). While on: its goal, today's counts
   (`2 of 5 added · 1 of 2 under way`) and its settings in plain words.
 - **Its wakes show in its chat**, under the name `Autopilot`, in autopilot's colour, never as your words.
 - **Its colours** on the list are the theme's own, as a task's ([colours](colours.md)): red where it needs you, yellow
-  while it works. The mark and the state word on its line say the same, so colour is never the only clue.
+  while it works. Its panel's state word says the same, so colour is never the only clue.
 
 ## When it wakes
 
@@ -148,7 +126,7 @@ another machine) reaches it as `(not a wake) Autopilot woke: …`. A coordinator
 the same conversation, as your first message would start it.
 
 - **Answered** is a wake whose turn ended within 15 minutes. After `autopilot.needsYouAfter` unanswered in a row, its row
-  says `needs you` and no more wakes are sent until `Tab` or `autopilot on`. One answered sets the count back to zero.
+  says `needs you` and no more wakes are sent until `Ctrl+O` or `autopilot on`. One answered sets the count back to zero.
 - **A start that failed** is not a wake: it counts toward no limit, waits for the gap before the next try, and the row
   says `autopilot could not start: <reason>` until a start works.
 
@@ -228,7 +206,7 @@ herdr-projects show --main-coordinator
   still wins for the chat it starts.
 
 On the board, `Ctrl+E` on a coordinator's row opens its settings page, in the task settings page's form and keys. Its
-own rows come first, under `This coordinator`; then on this machine's heading your own settings, on a repo's heading
+own rows come first, under `This coordinator`; then on this machine's row your own settings, on a project's row
 your entry for that repo. While autopilot is on, `Enter` on an autopilot row other than the goal saves it for this time
 (`*`), and a line under the rows says so. The goal always saves as this coordinator's own. `Ctrl+U` puts a row back.
 
@@ -272,9 +250,9 @@ What each means in full is in [the list](settings.md#the-list).
 ## Other machines
 
 **Each machine runs its own coordinators' autopilot**, with its own settings and limits. This board shows their lines
-and panels as that machine sends them with its tasks, and sends `Tab` and `Ctrl+X` there. `Ctrl+E` on one shows its
+and panels as that machine sends them with its tasks, and sends `Ctrl+O` (and `Ctrl+S`, `Ctrl+X`) there. `Ctrl+E` on one shows its
 settings whole, to read, and says to change them there. Each coordinator with a row is sent, its machine's and every
-repo's that machine knows, one that never ran as off: `Tab` there starts it, as a first message would. A machine on an
+repo's that machine knows, one that never ran as off: `Ctrl+O` there starts it, as a first message would. A machine on an
 older version sends no autopilot at all, and the keys say to update it there.
 
 **The main Coordinator sees other machines only while a board is open.** The keeper does not ask other machines for

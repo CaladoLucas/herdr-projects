@@ -33,7 +33,7 @@ fn a_task_only_to_wait_for_others_stays_in_to_do_saying_nothing_of_it_on_its_row
     let mut b = open(&w.root, 30);
     let text = b.screen(120).join("\n");
     // (Its row may be the selected one, with the bar in its gutter: the three are added within the same moment.)
-    assert!(has(&text, r"\n[ ▌]○ PRJ-2 +Second +0s ago"), "{text}");
+    assert!(has(&text, r"\n[ ▌]  ○ PRJ-2 +Second +0s ago"), "{text}");
     // herdr's sidebar and the web Board say nothing of it either.
     let e = sw::flow::sidebar_entry::entry_of(&row(&id), "", sw::clock::now());
     assert!(![&e.place, &e.stands, &e.line].iter().any(|x| x.contains("PRJ-1")), "{e:?}");
@@ -53,7 +53,7 @@ fn a_task_only_to_wait_for_others_stays_in_to_do_saying_nothing_of_it_on_its_row
     assert_eq!(row(&id).s("note"), "");
     // Tab on it now starts it at once: nothing to wait for any more, so nothing is asked.
     b.s.sel = id.clone(); b.load();
-    b.press(&["tab"]);
+    b.press(&["ctrl+s"]);
     assert!(!b.text().contains("now?"), "{}", b.text());
     let t = settle(&id);
     assert!(!["after", "queued", "todo"].contains(&t.s("stage")), "{}", t.s("stage"));
@@ -71,7 +71,7 @@ fn a_tabbed_task_with_after_is_queued_like_one_that_waits_for_a_free_slot_and_st
     // Tab queues it: it is not done before PRJ-3 is.
     let mut b = open(&w.root, 40);
     b.s.sel = id.clone(); b.load();
-    b.press(&["tab"]);
+    b.press(&["ctrl+s"]);
     assert_eq!(task(&id).s("stage"), "after");
     let r = as_row(&row(&id));
     assert_eq!((r.s("state"), sw::shown::states::group_of(&r)), ("working", "working"));

@@ -59,7 +59,7 @@ pub fn command(cmd: &str, a: &Args) -> Res<(Value, String)> {
             };
             // Added from a coordinator's pane, in any turn: its own, which its autopilot's `added` never wakes it for.
             if let (None, Some(co)) = (&pilot, crate::autopilot::turn::caller()) { crate::store::tasks::set(t.s("id"), json!({ "coordinator": co.settings_key() }))?; }
-            // Added by the Coordinator from a message the human sent with tab: delegated here, flag or no flag.
+            // Added by the Coordinator from a message the human sent with the start key: delegated here, flag or no flag.
             let mut tab = false;
             if !flags.b("delegate") && !crate::util::env_set("HERDR_PLUGIN_ID") { if let Some(p) = crate::util::env_val("HERDR_PANE_ID") { tab = crate::coordinator::requests::tab_turn(&p, &current_socket()); } }
             let after = after.filter(|d| !d.is_empty());

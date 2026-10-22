@@ -32,7 +32,7 @@ fn open() -> Client {
     let ctx = Ctx { cwd: last_folder(), web: true, ..Default::default() };
     let keys = crate::store::keys_given::keys_note(); // every repo has a short key: what was given, said once
     let mut s = State::new(ctx, Data::default());
-    if !keys.is_empty() { s.flash(keys, crate::shown::ink::Ink::Green); }
+    if !keys.is_empty() { s.flash(keys, crate::shown::ink::Ink::Muted); }
     // The web board keeps its own few choices, in a file of its own: it never writes the terminal board's.
     // The selection is where the terminal board left it, and so is whose board it shows (this machine, every machine
     // or one), unless a board was picked on the web: that one is the web's own ("scope", kept before, is not: every
@@ -76,7 +76,7 @@ pub fn save_prefs(s: &State) {
 }
 /// Everything read again: the tasks, the closer look at the selected one and the one the chat talks to.
 pub fn reload(c: &mut Client) {
-    let wants = Wants { ids: vec![c.s.sel.clone(), c.s.reply_id.clone()], cwd: c.s.ctx.cwd.clone(), own_pane: String::new(), web: true, coord: crate::board::update::coords::wanted(&c.s), mine: None, skills: String::new() };
+    let wants = Wants { ids: vec![c.s.sel.clone(), c.s.reply_id.clone()], cwd: c.s.ctx.cwd.clone(), own_pane: String::new(), web: true, coord: crate::board::update::coords::wanted(&c.s), mine: None, looks: crate::board::update::coords::looks_wanted(&c.s), skills: String::new() };
     let d = load(&wants);
     let fx = update(&mut c.s, Event::Loaded(Box::new(d)));
     effects(c, fx, false);

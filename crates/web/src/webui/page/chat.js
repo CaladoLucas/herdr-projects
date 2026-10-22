@@ -76,7 +76,7 @@ export function chatEl({ onSend, onPress, onDock }) {
   // A voice call with whoever the chat talks to: its button in the box beside the mic, its row under the bar (callbtn.js).
   // Docked, the button is in the web UI's box, beside its mic (dock.js); with the board's own chat, in the board's box.
   const phone = callEl();
-  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(files.expand(box.value), to); }, onTab: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit(), call: phone.btn });
+  const { el: compose, card, box, to: chip, send, also, grow, files, voice, say, destroy } = composeEl({ onSend: go, onInput: () => { if (closed) return; sync(); keep(files.expand(box.value), to); }, onStart: () => { if (also.hidden || busy) return false; go(true); return true; }, whom, hold: () => busy, onGrow: () => room?.fit(), call: phone.btn });
   box.value = saved();
   if (box.value.trim()) to = savedTo(); // a reload brings the words back with who they were for
 
@@ -105,7 +105,7 @@ export function chatEl({ onSend, onPress, onDock }) {
     // before the page knows who it shows, right after a reload), it is the plain one, never the open task's colour.
     card.className = `sw-card sw-b-${to && (moved || !now) ? "text" : tone}`;
     chip.hidden = !moved; chip.className = "sw-to is-locked"; chip.textContent = moved ? `To: ${to.label}${to.reply ? " agent" : ""} · not who is shown above` : "";
-    send.disabled = !typing || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typing || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Tab)` : "";
+    send.disabled = !typing || busy || files.busy(); files.refresh(); voice.sync(); send.title = cap(l.enter) || "Send message"; also.hidden = !typing || !l.delegate; also.disabled = busy; also.title = l.delegate ? `${cap(l.delegate)} (Ctrl+S)` : "";
   }
   const el = h("footer.sw-chat", { "aria-label": "Chat" }, bar, phone.strip, note, own);
 
