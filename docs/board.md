@@ -136,7 +136,8 @@ A project you are done with for now leaves the board whole, and comes back as it
   as a stopped one does. A task you had archived on its own before stays in the archive.
 - **From the shell:** `herdr-projects archive --repo mstars` (`Archived mstars and its 6 tasks. Stopped first:
   MST-4.`) and `herdr-projects restore --repo mstars` (`Restored mstars and its 6 tasks.`). They do not ask.
-- The web board does the same with the same key, on a project's row and in the archive. Only this machine's projects:
+- The web board does the same: select the project's row, then **Archive** among its coordinator's buttons (Open) or in
+  More…; in the archive its row, selected, has **Restore this project** under it. Only this machine's projects:
   another machine's are archived there.
 
 ### The list says what it hides
@@ -587,7 +588,7 @@ are sent from another machine, so a count would not be true). All of that is in 
 - **The arrows only move the selection**; they never change who you talk to. While you talk to a task's agent, the chat
   follows the selection: move to another task and you talk to that task's agent, with its latest message shown.
 - **A task with no agent to talk to** is still named, with where your message goes instead: it starts an agent on a task
-  that is to do; it goes to the Coordinator about that task otherwise. An archived task is read-only.
+  that is to do; it goes to the top row's coordinator about that task otherwise (`no agent on it: your message goes to vm-str's coordinator, about this task`). An archived task is read-only.
 - **With no task selected** (words on their way to another machine, an empty list), the chat names the Coordinator until
   a task is selected again.
 - **If the task you talk to goes away** (removed), you are back with the top row's coordinator, never on a neighbour's agent.
