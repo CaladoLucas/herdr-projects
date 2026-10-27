@@ -17,7 +17,7 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             if flag("--pane").and_then(|id| find(st, &id)).is_some_and(|i| st["panes"][i].b("infoFails")) { return fail("timeout", "timed out"); }
             let Some(pi) = flag("--pane").and_then(|id| find(st, &id)) else { return fail("pane_not_found", "pane not found") };
             let p = &st["panes"][pi];
-            let shell = 4194400;
+            let shell = if st.b("originCaller") && st.s("originCaller") != p.s("pane_id") { 4194401 } else { 4194400 };
             // The agent is pid 1, with a process under it. `tool`: a command in a group of its own (not listed); in its own
             // group: `helper`, one wired to it (an MCP server); `child`, a command that is not; `wrapped`, the
             // agent's own program under an npm wrapper. `shell`: the pane's shell is that real process; `infoFails`: herdr
@@ -102,7 +102,13 @@ pub fn pane(st: &mut Value, verb: &str, arg2: &str, argv: &[String], flag: &dyn 
             arr(st, "typed").push(json!({ "pane": arg2, "text": argv.get(3) }));
             ok(json!({ "type": "ok" }))
         }
+        "report-metadata" if st.b("metadataFails") => fail("timeout", "metadata unavailable"),
         "report-metadata" => {
+            if !st["panes"][pi].at("tokens").is_object() { st["panes"][pi]["tokens"] = json!({}); }
+            for pair in argv.windows(2) {
+                if pair[0] == "--token" { if let Some((k, v)) = pair[1].split_once('=') { st["panes"][pi]["tokens"][k] = json!(v); } }
+                if pair[0] == "--clear-token" { st["panes"][pi]["tokens"].as_object_mut().unwrap().remove(&pair[1]); }
+            }
             arr(st, "metadata").push(json!({ "pane": arg2, "args": argv[3..] }));
             if let Some(d) = flag("--display-agent") { st["panes"][pi]["display_agent"] = json!(d); }
             if argv.iter().any(|a| a == "--clear-display-agent") { if let Some(o) = st["panes"][pi].as_object_mut() { o.remove("display_agent"); } }
