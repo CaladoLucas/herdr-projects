@@ -17,13 +17,29 @@ pub fn empty() -> Value { json!({ "seq": 0, "nextW": 1, "nextP": 100, "workspace
 pub fn arr<'a>(v: &'a mut Value, k: &str) -> &'a mut Vec<Value> { if !v.at(k).is_array() { v[k] = json!([]); } v[k].as_array_mut().unwrap() }
 
 impl Fake for FakeHerdr {
+    fn peer_pid(&self) -> Option<i64> { Some(4194399) }
+    fn ask(&self, method: &str, params: &Value) -> Result<Value, sw::herdr::HerdrError> {
+        let mut a = vec!["pane".to_string()];
+        match method {
+            "pane.get" => a.extend(["get".into(), params.t("pane_id")]),
+            "pane.process_info" => a.extend(["process-info".into(), "--pane".into(), params.t("pane_id")]),
+            "pane.report_metadata" => {
+                a.extend(["report-metadata".into(), params.t("pane_id"), "--source".into(), params.t("source")]);
+                for (k, v) in params.at("tokens").as_object().into_iter().flatten() { a.extend(["--token".into(), format!("{k}={}", text(v))]); }
+            }
+            _ => return Err(sw::herdr::HerdrError { code: "unknown".into(), message: "unknown fake request".into() }),
+        }
+        let r = self.run(&a, "");
+        if r.status != 0 { return Err(sw::herdr::HerdrError { code: "failed".into(), message: r.stderr }); }
+        Ok(serde_json::from_str::<Value>(&r.stdout).unwrap().at("result").clone())
+    }
     fn run(&self, args: &[String], _input: &str) -> Ran {
         let r = self.answer(args);
         let Exit(status, stdout, stderr) = match r { Ok(e) | Err(e) => e };
         Ran { status, stdout, stderr }
     }
     /// pid 1 is an agent with one process under it: 2, wired to it (an MCP server), or 3, which is not (`child`, `wrapped`)
-    fn kids(&self, pid: i64) -> Vec<i64> { if pid != 1 { vec![] } else if self.st.borrow().arr("panes").iter().any(|p| p.b("child") || p.b("wrapped")) { vec![3] } else { vec![2] } }
+    fn kids(&self, pid: i64) -> Vec<i64> { if pid == 4194399 { vec![4194400] } else if pid == 4194400 && self.st.borrow().b("originCaller") { vec![std::process::id() as i64] } else if pid != 1 { vec![] } else if self.st.borrow().arr("panes").iter().any(|p| p.b("child") || p.b("wrapped")) { vec![3] } else { vec![2] } }
     fn wired_to(&self, pid: i64, group: &[i64]) -> Option<bool> { self.wiring(pid, group).wired() }
     /// 2 is wired to the agent (but a dev server, `tool`); 3 streams to the terminal, or (`child` says) is wired to a
     /// file, closed, or cannot be looked at
@@ -57,12 +73,14 @@ impl FakeHerdr {
     pub fn pane_out(p: &Value) -> Value {
         let mut o = json!({ "pane_id": p.at("pane_id"), "workspace_id": p.at("workspace_id"), "tab_id": p.at("tab_id"), "terminal_id": p.at("terminal_id"), "cwd": p.at("cwd"), "foreground_cwd": p.at("cwd"),
             "agent": if p.at("agent").is_object() { p.at("agent").at("kind").clone() } else { Value::Null }, "agent_status": if p.at("agent").is_object() { p.at("agent").at("status").clone() } else { json!("unknown") } });
+        if p.at("tokens").is_object() { o["tokens"] = p.at("tokens").clone(); }
         if p.b("display_agent") { o["display_agent"] = p.at("display_agent").clone(); }
         o
     }
     pub fn agent_out(p: &Value) -> Value {
         let a = p.at("agent");
         let mut o = json!({ "agent": a.at("kind"), "agent_status": a.at("status"), "name": a.at("name"), "pane_id": p.at("pane_id"), "workspace_id": p.at("workspace_id"), "tab_id": p.at("tab_id"), "terminal_id": p.at("terminal_id"), "cwd": p.at("cwd"), "foreground_cwd": p.at("cwd"), "state_change_seq": a.at("seq") });
+        if p.at("tokens").is_object() { o["tokens"] = p.at("tokens").clone(); }
         if p.b("display_agent") { o["display_agent"] = p.at("display_agent").clone(); }
         if !a.at("completion").is_null() { o["completion_seq"] = a.at("completion").clone(); }
         if a.b("session") { o["agent_session"] = json!({ "kind": "id", "value": a.at("session") }); }

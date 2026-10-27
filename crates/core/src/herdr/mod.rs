@@ -9,6 +9,7 @@ pub mod cli;
 pub mod find;
 pub mod keys;
 pub mod launched;
+pub mod origin;
 pub mod palette;
 pub mod procs;
 pub mod shell_ready;

@@ -82,6 +82,7 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
     let asked: Vec<(String, Value)> = asked.into_iter().filter(|(_, v)| !(v.is_null() || *v == json!(""))).collect();
     let values = checked(&asked, &Scope::task(&cur))?;
     let socket = current_socket();
+    let origin = if !cur.has("creationOrigin") && !cur.has("queuedAt") && !cur.b("startedOnce") && !cur.at("link").b("pane") { crate::herdr::origin::capture(&socket) } else { None };
     let mut stale: Vec<Task> = vec![];
     let mut old: Option<(String, String)> = None; // the last round's space, when its clean-up had not closed it yet
     let t = update(cur.s("id"), |t| {
@@ -112,6 +113,7 @@ pub fn delegate_with(id: &str, asked: Vec<(String, Value)>, w: Wait) -> Res<Task
         // Research only or not is decided when the agent starts, not here: until then the task follows the setting.
         let why = turn_refusal(t, setting(RESEARCH, Some(t)) == json!(true));
         if !why.is_empty() { crate::fail!("{why} To start it as it was: herdr-projects set {RESEARCH} false --task {id}"); }
+        if !t.has("creationOrigin") { t.put("creationOrigin", origin.clone().unwrap_or(json!(false))); }
         t.put("researchOpen", true);
         let agent = agent_of(&setting_text("worker.agent", Some(t))).kind;
         t.put("agent", agent.clone()); t.put("app", agent);
