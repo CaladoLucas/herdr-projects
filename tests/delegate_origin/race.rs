@@ -59,8 +59,8 @@ fn replacement_exactly_at_write_receives_only_evidence_bound_to_original_child()
     let t = tokens(&w, &child);
     assert_eq!(t.as_object().unwrap().len(), 1, "no legacy fallback may describe B");
     let evidence: Value = serde_json::from_str(t.s("spawn_origin")).expect("a versioned JSON string");
-    assert_eq!(evidence, json!({"version": 1, "child_terminal_id": child.at("terminal_id"), "parent_terminal_id": origin.at("terminal"), "parent_pane_id": origin.at("pane")}));
-    assert_ne!(evidence.s("child_terminal_id"), "replacement-B", "consumer must reject this observation for B");
+    assert_eq!(evidence, json!([1, child.at("terminal_id"), origin.at("terminal")]));
+    assert_ne!(evidence[1].as_str().unwrap(), "replacement-B", "consumer must reject this observation for B");
 }
 #[test]
 fn all_claim_keys_observed_at_the_child_read_are_preserved_even_when_malformed() {
@@ -98,4 +98,26 @@ fn a_concurrent_versioned_claim_seen_after_write_is_left_intact_and_reports_conf
     assert!(stamp(&w, &origin, &child).is_none());
     assert_eq!(f.writes.get(), 1, "no cleanup, retry or claim restoration");
     assert_eq!(tokens(&w, &child), rival);
+}
+
+#[test]
+fn serialized_tuple_limit_counts_utf8_bytes_and_never_truncates_or_writes_over_limit() {
+    let w = common::world();
+    let (origin, mut child) = scene(&w);
+    let overhead = json!([1, "", origin.at("terminal")]).to_string().len();
+    for terminal in ["x".repeat(80 - overhead), "x".repeat(81 - overhead), "é".repeat((80 - overhead) / 2 + 1), "\"".repeat(80 - overhead)] {
+        child["terminal_id"] = json!(terminal);
+        let f = race(&w, &child, json!({}), json!({}), json!({}));
+        f.patch(&json!({"terminal_id": terminal, "tokens": {}}));
+        let encoded = json!([1, terminal, origin.at("terminal")]).to_string();
+        if encoded.len() <= 80 {
+            assert_eq!(stamp(&w, &origin, &child), Some(()));
+            assert_eq!(f.writes.get(), 1);
+            assert_eq!(tokens(&w, &child).s("spawn_origin"), encoded);
+        } else {
+            assert!(stamp(&w, &origin, &child).is_none());
+            assert_eq!(f.writes.get(), 0, "oversized serialized UTF-8 must not reach Herdr");
+            assert_eq!(tokens(&w, &child), json!({}));
+        }
+    }
 }

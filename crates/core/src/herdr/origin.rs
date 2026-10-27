@@ -109,8 +109,9 @@ pub fn stamp(origin: &Value, socket: &str, pane: &str, terminal: &str) -> Option
     if ["spawn_origin", "spawned_by", "spawned_by_terminal"].iter().any(|k| tokens.get(*k).is_some()) { return None; }
     // Bind the evidence itself to the expected child. A delayed pane-ID write may land on a replacement, but it
     // cannot describe that replacement. Never also emit legacy tokens: their consumers cannot check the child.
-    let evidence = json!({ "version": 1, "child_terminal_id": terminal,
-        "parent_terminal_id": origin.at("terminal"), "parent_pane_id": origin.at("pane") }).to_string();
+    let evidence = json!([1, terminal, origin.s("terminal")]).to_string();
+    // Herdr 0.9.5 truncates token values at 80 characters. Bytes are conservative for UTF-8; never truncate evidence.
+    if evidence.len() > 80 { return None; }
     c.call("pane.report_metadata", json!({ "pane_id": pane, "source": "plugin:herdr-projects", "tokens": {
         "spawn_origin": evidence
     } }))?;

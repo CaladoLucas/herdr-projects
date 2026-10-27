@@ -149,9 +149,7 @@ fn sidebar_and_other_sources_keep_their_tokens() {
     sw::flow::sidebar::tell_sidebar(&t);
     let p = w.pane_of(&t);
     let evidence: Value = serde_json::from_str(p.at("tokens").s("spawn_origin")).unwrap();
-    assert_eq!(evidence.s("parent_pane_id"), parent.s("pane_id"));
-    assert_eq!(evidence.s("parent_terminal_id"), parent.s("terminal_id"));
-    assert_eq!(evidence.s("child_terminal_id"), t.at("link").s("terminal"));
+    assert_eq!(evidence, json!([1, t.at("link").s("terminal"), parent.s("terminal_id")]));
     assert_eq!(p.at("tokens").s("other"), "untouched");
     assert!(spawn_writes(&w).iter().all(|m| m.to_string().contains("plugin:herdr-projects")));
 }
@@ -256,7 +254,7 @@ fn unix_server_closing_after_each_response_supports_capture_and_stamp() {
     assert_eq!(writes.len(), 1);
     assert_eq!(writes[0].at("tokens").as_object().unwrap().len(), 1);
     let evidence: Value = serde_json::from_str(writes[0].at("tokens").s("spawn_origin")).unwrap();
-    assert_eq!(evidence, json!({"version": 1, "child_terminal_id": "terminal-child", "parent_terminal_id": "terminal-parent", "parent_pane_id": "parent"}));
+    assert_eq!(evidence, json!([1, "terminal-child", "terminal-parent"]));
     assert_eq!(writes[0].s("source"), "plugin:herdr-projects");
 }
 
