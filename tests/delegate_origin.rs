@@ -1,4 +1,5 @@
 //! Verified delegation origin survives queues and retries without guessing a parent or replacing sidebar tokens.
+mod race;
 use crate::common::{self, *};
 use sw::json::*;
 
@@ -10,7 +11,7 @@ fn caller(w: &World) -> Value {
     p
 }
 fn spawn_writes(w: &World) -> Vec<Value> {
-    w.state().arr("metadata").iter().filter(|m| m.to_string().contains("spawned_by")).cloned().collect()
+    w.state().arr("metadata").iter().filter(|m| m.to_string().contains("spawn_origin") || m.to_string().contains("spawned_by")).cloned().collect()
 }
 #[test]
 fn verified_origin_is_saved_before_background_and_stamped_on_child() {
@@ -147,8 +148,10 @@ fn sidebar_and_other_sources_keep_their_tokens() {
     assert_eq!(w.pane_of(&t).at("tokens").s("progress"), "42");
     sw::flow::sidebar::tell_sidebar(&t);
     let p = w.pane_of(&t);
-    assert_eq!(p.at("tokens").s("spawned_by"), parent.s("pane_id"));
-    assert_eq!(p.at("tokens").s("spawned_by_terminal"), parent.s("terminal_id"));
+    let evidence: Value = serde_json::from_str(p.at("tokens").s("spawn_origin")).unwrap();
+    assert_eq!(evidence.s("parent_pane_id"), parent.s("pane_id"));
+    assert_eq!(evidence.s("parent_terminal_id"), parent.s("terminal_id"));
+    assert_eq!(evidence.s("child_terminal_id"), t.at("link").s("terminal"));
     assert_eq!(p.at("tokens").s("other"), "untouched");
     assert!(spawn_writes(&w).iter().all(|m| m.to_string().contains("plugin:herdr-projects")));
 }
@@ -219,7 +222,7 @@ impl OneReplyServer {
                 let p = r.at("params");
                 let result = match r.s("method") {
                     "stop" => break,
-                    "pane.get" => json!({"pane": {"pane_id": p.at("pane_id"), "terminal_id": format!("terminal-{}", p.s("pane_id"))}}),
+                    "pane.get" => json!({"pane": {"pane_id": p.at("pane_id"), "terminal_id": format!("terminal-{}", p.s("pane_id")), "tokens": recorded.lock().unwrap().last().map(|v: &Value| v.at("tokens").clone()).unwrap_or(json!({}))}}),
                     "pane.process_info" => json!({"process_info": {"pane_id": p.at("pane_id"), "shell_pid": std::process::id()}}),
                     "pane.report_metadata" => { recorded.lock().unwrap().push(p.clone()); json!({"type": "ok"}) },
                     _ => panic!("unexpected request"),
@@ -251,7 +254,9 @@ fn unix_server_closing_after_each_response_supports_capture_and_stamp() {
     assert!(sw::herdr::origin::stamp(&origin, socket, "child", "terminal-child").is_some());
     let writes = server.writes.lock().unwrap();
     assert_eq!(writes.len(), 1);
-    assert_eq!(writes[0].at("tokens"), &json!({"spawned_by": "parent", "spawned_by_terminal": "terminal-parent"}));
+    assert_eq!(writes[0].at("tokens").as_object().unwrap().len(), 1);
+    let evidence: Value = serde_json::from_str(writes[0].at("tokens").s("spawn_origin")).unwrap();
+    assert_eq!(evidence, json!({"version": 1, "child_terminal_id": "terminal-child", "parent_terminal_id": "terminal-parent", "parent_pane_id": "parent"}));
     assert_eq!(writes[0].s("source"), "plugin:herdr-projects");
 }
 

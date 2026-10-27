@@ -106,11 +106,19 @@ pub fn stamp(origin: &Value, socket: &str, pane: &str, terminal: &str) -> Option
     if endpoint(socket)? != runtime { return None; }
     // Herdr's tokens are pane-global even though writes have a source. Do not take over an existing claim.
     let tokens = child.at("tokens");
-    if tokens.has("spawned_by") || tokens.has("spawned_by_terminal") { return None; }
+    if ["spawn_origin", "spawned_by", "spawned_by_terminal"].iter().any(|k| tokens.get(*k).is_some()) { return None; }
+    // Bind the evidence itself to the expected child. A delayed pane-ID write may land on a replacement, but it
+    // cannot describe that replacement. Never also emit legacy tokens: their consumers cannot check the child.
+    let evidence = json!({ "version": 1, "child_terminal_id": terminal,
+        "parent_terminal_id": origin.at("terminal"), "parent_pane_id": origin.at("pane") }).to_string();
     c.call("pane.report_metadata", json!({ "pane_id": pane, "source": "plugin:herdr-projects", "tokens": {
-        "spawned_by": parent.at("pane_id"), "spawned_by_terminal": parent.at("terminal_id")
+        "spawn_origin": evidence
     } }))?;
-    if c.pane(origin.s("pane"))?.s("terminal_id") != origin.s("terminal") || c.pane(pane)?.s("terminal_id") != terminal { return None; }
+    if c.pane(origin.s("pane"))?.s("terminal_id") != origin.s("terminal") { return None; }
+    let after = c.pane(pane)?;
+    let tokens = after.at("tokens");
+    if after.s("terminal_id") != terminal || tokens.s("spawn_origin") != evidence ||
+        ["spawned_by", "spawned_by_terminal"].iter().any(|k| tokens.get(*k).is_some()) { return None; }
     Some(())
 }
 
